@@ -25,10 +25,10 @@ class BotSign(object):
       if not os.path.exists(self.ossl_path):
          self.signing = False
 
-      if not 'CS_CERTIFICATE' in os.environ:
+      if 'CS_CERTIFICATE' not in os.environ:
          self.signing = False
 
-      if not 'CS_CERTIFICATE_PASSWORD' in os.environ:
+      if 'CS_CERTIFICATE_PASSWORD' not in os.environ:
          self.signing = False
 
       if self.signing:
@@ -50,30 +50,30 @@ class BotSign(object):
       return self.signing
 
    def sign_file_inplace(self, filename):
-      signed_filename = filename + '.signed'
-      signed_cmdline = []
-
-      signed_cmdline.append (self.ossl_path)
-      signed_cmdline.append ('sign')
-      signed_cmdline.append ('-pkcs12')
-      signed_cmdline.append (self.local_key)
-      signed_cmdline.append ('-pass')
-      signed_cmdline.append (self.password)
-      signed_cmdline.append ('-n')
-      signed_cmdline.append (self.product)
-      signed_cmdline.append ('-i')
-      signed_cmdline.append (self.url)
-      signed_cmdline.append ('-h')
-      signed_cmdline.append ('sha384')
-      signed_cmdline.append ('-t')
-      signed_cmdline.append ('http://timestamp.sectigo.com')
-      signed_cmdline.append ('-in')
-      signed_cmdline.append (filename)
-      signed_cmdline.append ('-out')
-      signed_cmdline.append (signed_filename)
+      signed_filename = f'{filename}.signed'
+      signed_cmdline = [
+          self.ossl_path,
+          'sign',
+          '-pkcs12',
+          self.local_key,
+          '-pass',
+          self.password,
+          '-n',
+          self.product,
+          '-i',
+          self.url,
+          '-h',
+          'sha384',
+          '-t',
+          'http://timestamp.sectigo.com',
+          '-in',
+          filename,
+          '-out',
+          signed_filename,
+      ]
 
       result = subprocess.run (signed_cmdline, capture_output=True, text=True)
-      
+
       if result.returncode == 0:
          os.unlink(filename)
          shutil.move(signed_filename, filename)
@@ -97,24 +97,24 @@ class BotRelease(object):
       self.artifacts = 'artifacts'
       self.graphs = 'yapb-gcdn.akamaized.net'
       self.win32exe = 'https://github.com/yapb/setup/releases/latest/download/botsetup.exe'
-      
+
       meson_src_root_env = 'MESON_SOURCE_ROOT'
 
       if meson_src_root_env in os.environ:
          os.chdir(os.environ.get(meson_src_root_env))
       else:
-         raise Exception(f'No direct access, only via meson build.')
+         raise Exception('No direct access, only via meson build.')
 
       path = pathlib.Path().absolute()
 
       if not os.path.isdir(os.path.join(path, self.artifacts)):
          raise Exception('Artifacts directory missing.')
-      
+
       print(f'Releasing {self.project} v{self.version}')
-      
+
       self.work_dir = os.path.join(path, 'release')
       shutil.copytree(f'{path}/cfg', self.work_dir, dirs_exist_ok=True)
-      
+
       self.bot_dir = os.path.join(self.work_dir, 'addons', self.project)
       self.pkg_dir = os.path.join(path, 'pkg')
 
@@ -128,8 +128,7 @@ class BotRelease(object):
       os.makedirs(self.pkg_dir, exist_ok=True)
       self.http_pull(self.win32exe, 'botsetup.exe')
 
-      self.pkg_matrix = []
-      self.pkg_matrix.append (BotPackage('windows', 'zip', {'windows-x86': 'dll'}))
+      self.pkg_matrix = [BotPackage('windows', 'zip', {'windows-x86': 'dll'})]
       self.pkg_matrix.append (BotPackage('windows', 'exe', {'windows-x86': 'dll'}))
       self.pkg_matrix.append (BotPackage('linux', 'tar.xz', {'linux-x86': 'so'}))
       self.pkg_matrix.append (BotPackage('extras', 'zip', 
@@ -181,20 +180,20 @@ class BotRelease(object):
    def compress_directory(self, path: str, handle: zipfile.ZipFile):
       length = len(path) + 1
       empty_dirs = []
-      
+
       for root, dirs, files in os.walk(path):
          empty_dirs.extend([dir for dir in dirs if os.listdir(os.path.join(root, dir)) == []]) 
-         
+
          for file in files:
             file_path = os.path.join(root, file)
             handle.write(file_path, file_path[length:])
-            
+
          for dir in empty_dirs:
             dir_path = os.path.join(root, dir)
-            
-            zif = zipfile.ZipInfo(dir_path[length:] + '/')
+
+            zif = zipfile.ZipInfo(f'{dir_path[length:]}/')
             handle.writestr(zif, '')
-            
+
          empty_dirs = []
 
    def create_zip(self, dest: str, custom_dir: str = None):
